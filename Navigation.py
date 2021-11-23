@@ -13,7 +13,7 @@ class Navigation:
         # State variables
         self.state = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
         self.state_hat = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
-        self.prevTime = 0.0
+        self.prev_time = 0.0
 
         # System Matrices 
         self.A = np.identity(6)     # state transition matrix  
@@ -29,32 +29,31 @@ class Navigation:
                        [0,        0,         1]])
         return R
 
-    def get_initial_state(self, rosmsg):
-        self.nu_b = [0.0, 0.0, 0.0]
-        # Get GPS coordinate of body
+    def get_initial_state(self, bodyGPS, mapGPS, yaw):
+        '''
+        Initalizes initial state for state estimation. 
+
+            Parameters:
+                bodyGPS (dict): contains 'lat', 'lon', and 'alt' of body frame
+                mapGPS (dict): contains 'lat', 'lon', and 'alt' of map frame
+                imu (dict): contains heading of body frame w.r.t map frame
+        '''
         
-        bodyGPS = {"lat": rosmsg.Latitude, 
-                  "lon": rosmsg.Longtitude, 
-                  "alt": rosmsg.Altitude
-        }
-        
-        mapGPS = {"lat": rosmsg.Latitude,
-                  "lon": rosmsg.Longitude,
-                  "alt": rosmsg.Altitude
-        }
+        # Assume initial velocities is 0
+        self.state(3) = 0.0
+        self.state(4) = 0.0
+        self.state(5) = 0.0
 
         # Convert GPS to ECEF
-        mapECEF = {'lat': 0.0, 'lon': 0.0, 'alt': 0.0}
-        bodyECEF = {'lat': 0.0, 'lon': 0.0, 'alt': 0.0}
-
-        mapECEF['lat'], mapECEF['lon'], mapECEF['alt'] = self.gps_to_ecef_custom(mapGPS['lat'], mapGPS['lon'], mapGPS['alt'])
-        bodyECEF['lat'], bodyECEF['lon'], bodyECEF['alt'] = self.gps_to_ecef_custom(bodyGPS['lat'], bodyGPS['lon'], bodyGPS['alt'])
-
-        self.state[0] = bodyECEF['lat'] - mapECEF['lat']
-        self.state[1] = bodyECEF['lon'] - mapECEF['lat']
+        mapECEF = {'x': 0.0, 'y': 0.0, 'z': 0.0}
+        bodyECEF = {'x': 0.0, 'y': 0.0, 'z': 0.0}
+        mapECEF['x'], mapECEF['y'], mapECEF['z'] = self.gps_to_ecef_custom(mapGPS['lat'], mapGPS['lon'], mapGPS['alt'])
+        bodyECEF['x'], bodyECEF['y'], bodyECEF['z'] = self.gps_to_ecef_custom(bodyGPS['lat'], bodyGPS['lon'], bodyGPS['alt'])
+        self.state[0] = bodyECEF['x'] - mapECEF['x']
+        self.state[1] = bodyECEF['y'] - mapECEF['y']
 
         # Get yaw
-        self.state[3] = rosmsg.heading
+        self.state[3] = yaw
 
     def predict(A, B, x, u, Q, P):
         x_hat = np.dot(A, x) + np.dot(B, u)
