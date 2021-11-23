@@ -6,32 +6,57 @@ class Navigation:
     def __init__(self):
 
         # Dynamic parameters
-        M = np.identity(3)              # inertia matrix
-        D = np.identity(3)              # damping matrix 
-        tau = np.array([0.0, 0.0, 0.0]) # force vector  
+        self.M = np.identity(3)              # inertia matrix
+        self.D = np.identity(3)              # damping matrix 
+        self.tau = np.array([0.0, 0.0, 0.0]) # force vector  
 
         # State variables
-        self.pose_enu = np.array([0.0, 0.0, 0.0])
-        self.nu_b = np.array([0.0, 0.0, 0.0])
-        self.pose_enu_hat = np.array([0.0, 0.0, 0.0])
-        self.nu_b_hat = np.array([0.0, 0.0, 0.0])
+        self.state = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+        self.state_hat = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
         self.prevTime = 0.0
 
         # System Matrices 
-        self.A = np.identity(6)    # state transition matrix  
-        self.B = np.identity(3)    # control transition matrix
-        self.P = np.identity(3)    # process noise covariance matrix
-        self.P_hat = np.zeros(3,3) # estimated process noise covariance matrix
-        self.H = np.identity(3)    # sensor transition matrix 
-        self.Q = np.identity(3)    # sensor measurement noise
+        self.A = np.identity(6)     # state transition matrix  
+        self.B = np.identity(6)     # control transition matrix
+        self.P = np.identity(6)     # process noise covariance matrix
+        self.P_hat = np.identity(6) # estimated process noise covariance matrix
+        self.H = np.identity(6)     # sensor transition matrix 
+        self.Q = np.identity(6)     # sensor measurement noise
          
     def R_matrix(self, psi):
-        R = np.array([ [cos(psi), -sin(psi), 0];
-                       [sin(psi), cos(psi),  0];
+        R = np.array([ [cos(psi), -sin(psi), 0],
+                       [sin(psi), cos(psi),  0],
                        [0,        0,         1]])
         return R
 
-    def predict(A, B, x, u, Q):
+    def get_initial_state(self, rosmsg):
+        self.nu_b = [0.0, 0.0, 0.0]
+        # Get GPS coordinate of body
+        
+        bodyGPS = {"lat": rosmsg.Latitude, 
+                  "lon": rosmsg.Longtitude, 
+                  "alt": rosmsg.Altitude
+        }
+        
+        mapGPS = {"lat": rosmsg.Latitude,
+                  "lon": rosmsg.Longitude,
+                  "alt": rosmsg.Altitude
+        }
+
+        # Convert GPS to ECEF
+        mapECEF = {'lat': 0.0, 'lon': 0.0, 'alt': 0.0}
+        bodyECEF = {'lat': 0.0, 'lon': 0.0, 'alt': 0.0}
+
+        mapECEF['lat'], mapECEF['lon'], mapECEF['alt'] = self.gps_to_ecef_custom(mapGPS['lat'], mapGPS['lon'], mapGPS['alt'])
+        bodyECEF['lat'], bodyECEF['lon'], bodyECEF['alt'] = self.gps_to_ecef_custom(bodyGPS['lat'], bodyGPS['lon'], bodyGPS['alt'])
+
+        self.state[0] = bodyECEF['lat'] - mapECEF['lat']
+        self.state[1] = bodyECEF['lon'] - mapECEF['lat']
+
+        # Get yaw
+        self.state[3] = rosmsg.heading
+
+    def predict(A, B, x, u, Q, P):
         x_hat = np.dot(A, x) + np.dot(B, u)
         P_hat = np.dot(A, np.dot(P, A.T)) + Q
         return (x_hat, P_hat)
@@ -65,18 +90,18 @@ coords = [
 ]
 
 def gps_to_ecef_custom(lat, lon, alt):
-    rad_lat = lat * (math.pi / 180.0)
-    rad_lon = lon * (math.pi / 180.0)
+    rad_lat = lat * (pi / 180.0)
+    rad_lon = lon * (pi / 180.0)
 
     a = 6378137.0
     finv = 298.257223563
     f = 1 / finv
     e2 = 1 - (1 - f) * (1 - f)
-    v = a / math.sqrt(1 - e2 * math.sin(rad_lat) * math.sin(rad_lat))
+    v = a / sqrt(1 - e2 * sin(rad_lat) * sin(rad_lat))
 
-    x = (v + alt) * math.cos(rad_lat) * math.cos(rad_lon)
-    y = (v + alt) * math.cos(rad_lat) * math.sin(rad_lon)
-    z = (v * (1 - e2) + alt) * math.sin(rad_lat)
+    x = (v + alt) * cos(rad_lat) * cos(rad_lon)
+    y = (v + alt) * cos(rad_lat) * sin(rad_lon)
+    z = (v * (1 - e2) + alt) * sin(rad_lat)
 
     return x, y, z
 
@@ -85,7 +110,4 @@ def run_test():
         print('custom', gps_to_ecef_custom(pt[0], pt[1], pt[2]))
 
 if __name__ == "__main__":
-    x_hat, P_hat = predict(A, B, x, u, Q)
-    K = calculateKalmanGain(P_hat, H, R)
- 
-    #run_test()
+    pass
