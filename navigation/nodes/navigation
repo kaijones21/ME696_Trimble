@@ -1,0 +1,44 @@
+#!/usr/bin/env python
+
+import rospy 
+from sensor_msgs.msg import Imu, NavSatFix
+from geometry_msgs.msg import Vector3Stamped
+from nav_msgs.msg import Odometry
+from Navigation.navigation import Navigation 
+
+class NavigationROSWrapper:
+
+    def __init__(self):
+        # Initialize navigation object
+        self.nav = Navigation()
+    
+        # Create subscribers
+        rospy.Subscriber("/navsat/fix", NavSatFix, self.set_gps_data)
+        rospy.Subscriber("/imu/data", Imu, self.set_imu_data)
+        rospy.Subscriber("/imu/rpy/filtered", Vector3Stamped, self.set_yaw)
+
+        # Create publishers
+        self.publish_estimate = rospy.Publisher("/heron/esitmate/odometry", Odometry, queue_size=10)
+
+    def set_gps_data(self, msg): 
+        self.nav.set_gps_data({'lat': msg.latitude,
+                               'lon': msg.longitude,
+                               'alt': msg.altitude})
+    
+    def set_imu_data(self, msg):
+        self.nav.set_imu_data({'linear_x': msg.linear_acceleration.x,
+                               'linear_y': msg.linear_acceleration.y,
+                               'angular_z': msg.angular_velocity.z})
+
+    def set_yaw(self, msg):
+        self.nav.set_yaw(msg.vector.z)
+
+if __name__=='__main__':
+    rospy.init_node('stateEstimator')
+    rosNav = NavigationROSWrapper()
+    rospy.loginfo('State estimator node initiated successfully.')
+    rosNav.nav.get_initial_state()
+    rosNav.nav.predict()
+    rosNav.nav.calculateKalmanGain()
+    rosNav.nav.update()
+    rospy.spin()
