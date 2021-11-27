@@ -1,8 +1,9 @@
 #!/usr/bin/env python
 
+import numpy as np
 import rospy 
 from sensor_msgs.msg import Imu, NavSatFix
-from geometry_msgs.msg import Vector3Stamped
+from geometry_msgs.msg import Vector3Stamped, Twist
 from nav_msgs.msg import Odometry
 from Navigation.navigation import Navigation 
 
@@ -16,9 +17,10 @@ class NavigationROSWrapper:
         rospy.Subscriber("/navsat/fix", NavSatFix, self.set_gps_data)
         rospy.Subscriber("/imu/data", Imu, self.set_imu_data)
         rospy.Subscriber("/imu/rpy/filtered", Vector3Stamped, self.set_yaw)
+        rospy.Subscriber("/cmd_vel", Twist, self.set_cmd_input)
 
         # Create publishers
-        self.publish_estimate = rospy.Publisher("/heron/esitmate/odometry", Odometry, queue_size=10)
+        self.publish_estimate = rospy.Publisher("/heron/estimate/odometry", Odometry, queue_size=10)
 
     def set_gps_data(self, msg): 
         self.nav.set_gps_data({'lat': msg.latitude,
@@ -33,12 +35,27 @@ class NavigationROSWrapper:
     def set_yaw(self, msg):
         self.nav.set_yaw(msg.vector.z)
 
+    def set_cmd_input(self, msg):
+        self.nav.set_cmd_input(np.array([msg.linear.x, msg.linear.y, msg.angular.z]))
+
+    def pub_state(self, event):
+        new_state = self.nav.update_state()
+        state = Odometry()
+        state.pose.pose.position.x = new_state[0]
+        state.pose.pose.position.y = new_state[1]
+        state.pose.pose.orientation.z = new_state[2]
+        state.twist.twist.linear.x = new_state[3]
+        state.twist.twist.linear.y = new_state[4]
+        state.twist.twist.angular.z = new_state[5]
+
 if __name__=='__main__':
     rospy.init_node('stateEstimator')
     rosNav = NavigationROSWrapper()
     rospy.loginfo('State estimator node initiated successfully.')
+    freq = 1.0
+    dt = 1.0/freq
+    rosNav.nav.dt = dt
     rosNav.nav.get_initial_state()
     rosNav.nav.predict()
-    rosNav.nav.calculateKalmanGain()
-    rosNav.nav.update()
+    rospy.Timer(rospy.Duration(dt), rosNav.pub_state)
     rospy.spin()
