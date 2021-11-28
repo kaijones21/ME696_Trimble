@@ -5,7 +5,8 @@ import rospy
 from sensor_msgs.msg import Imu, NavSatFix
 from geometry_msgs.msg import Vector3Stamped, Twist
 from nav_msgs.msg import Odometry
-from Navigation.navigation import Navigation 
+#from Navigation.navigation import Navigation 
+from navigation import Navigation
 
 class NavigationROSWrapper:
 
@@ -25,7 +26,8 @@ class NavigationROSWrapper:
     def set_gps_data(self, msg): 
         self.nav.set_gps_data({'lat': msg.latitude,
                                'lon': msg.longitude,
-                               'alt': msg.altitude})
+                               'alt': msg.altitude})  
+        self.nav.set_gps_covariance(msg.position_covariance)
     
     def set_imu_data(self, msg):
         self.nav.set_imu_data({'linear_x': msg.linear_acceleration.x,
@@ -52,10 +54,9 @@ if __name__=='__main__':
     rospy.init_node('stateEstimator')
     rosNav = NavigationROSWrapper()
     rospy.loginfo('State estimator node initiated successfully.')
-    freq = 1.0
+    freq = 5.0
     dt = 1.0/freq
     rosNav.nav.dt = dt
     rosNav.nav.get_initial_state()
-    rosNav.nav.predict()
     rospy.Timer(rospy.Duration(dt), rosNav.pub_state)
     rospy.spin()

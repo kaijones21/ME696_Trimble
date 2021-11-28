@@ -29,7 +29,7 @@ class Navigation:
                            [0, 0, 0, 0, 0, 0],
                            [0, 0, 0, 0, 0, 0],
                            [0, 0, 0, 0, 0, 0]])      
-        self.Q = np.identity(6)                # sensor measurement noise
+        self.Q = np.identity(np.size(self.state))                # sensor measurement noise
         self.K = 0                             # Kalman gain 
         self.Z = np.zeros(6)                   # sensor measurements
 
@@ -42,18 +42,25 @@ class Navigation:
 
     def set_gps_data(self, gpsData):
         self.gpsData = gpsData
+        self.update_sensor_measurements()
+
+    def set_gps_covariance(self, gpsCov):
+        self.Q[0][0] = gpsCov[0]
+        self.Q[1][1] = gpsCov[4]
 
     def set_imu_data(self, imuData):
         self.imuData = imuData
+        self.update_sensor_measurements()
 
     def set_yaw(self, yaw):
         self.yaw = yaw
+        self.update_sensor_measurements()
     
     def set_cmd_input(self, cmd_input):
         self.u = cmd_input
 
-    def set_sensor_measurements(self):
-        self.z[0], self.z[1], self.z[2] = self.gps2ecef(self.gpsData['lat'], self.gpsData['lon'], self.gpsData['alt'])
+    def update_sensor_measurements(self):
+        self.Z[0], self.Z[1], self.Z[2] = self.gps2ecef(self.gpsData['lat'], self.gpsData['lon'], self.gpsData['alt'])
 
     def R_matrix(self, psi):
         R = np.array([ [cos(psi), -sin(psi), 0],
@@ -83,7 +90,6 @@ class Navigation:
         self.state_hat = np.dot(self.A, self.state) + np.dot(self.B, self.u)
         self.P_hat = np.dot(self.A, np.dot(self.P, self.A.T)) + self.Q
 
-
     def update_A_matrix(self):
         A1 = self.R_matrix(self.state[2])
         A2 = -1 * np.dot(self.M, self.D)
@@ -106,7 +112,7 @@ class Navigation:
         self.prevState = self.state 
         self.P = np.dot((np.identity(6) - np.dot(self.K,self.H)), self.P_hat)
         self.state = self.state_hat + np.dot(self.K, (self.Z - np.dot(self.H, self.state_hat)))
-        self.state[0], self.state[1], self.state[2] = self.ecef2gps(self.state[0], self.state[1], self.bodyECEF['z'])
+        self.state[0], self.state[1], self.gpsData['z'] = self.ecef2gps(self.state[0], self.state[1], self.bodyECEF['z'])
 
     def update_state(self):
         self.predict()
